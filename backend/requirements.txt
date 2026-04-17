@@ -1,0 +1,11 @@
+fastapi==0.136.0
+uvicorn==0.44.0
+python-multipart==0.0.26
+PyPDF2==3.0.1
+openai==2.32.0
+python-dotenv==1.2.2
+langgraph==1.1.6
+langchain==1.2.15
+chromadb==1.5.8
+sentence-transformers==5.4.1
+numpy==2.4.4
