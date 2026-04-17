@@ -3,40 +3,33 @@ function RetrievalResult({ result }) {
     <div className="result-section">
       <div className="result-agent-label">
         <span className="result-agent-dot" />
-        Retrieval Agent
+        Retrieval Agent — fetched from database
       </div>
 
-      <h2 className="answer-heading">Answer</h2>
-      <p className="answer-text">{result.answer}</p>
-
-      {result.relevant_passages?.length > 0 && (
-        <>
-          <p className="passages-heading">Relevant Passages</p>
-          {result.relevant_passages.map((p, i) => (
-            <blockquote key={i}>{p}</blockquote>
-          ))}
-        </>
-      )}
-
-      {result.source_sections?.length > 0 && (
-        <>
-          <p className="passages-heading" style={{ marginTop: "0.75rem" }}>Sources</p>
-          {result.source_sections.map((s, i) => (
-            <p key={i} style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "0.25rem" }}>
-              {s}
-            </p>
-          ))}
-        </>
-      )}
-
-      <div className="confidence-badge">
-        Confidence: {result.confidence}
-      </div>
+      <p className="answer-text" style={{ marginBottom: "1rem" }}>
+        {result.message}
+      </p>
 
       {!result.found_in_doc && (
         <div className="warning-banner">
-          ⚠ This information was not found in the uploaded document.
+          ⚠ No relevant passages found in the paper for this query.
         </div>
+      )}
+
+      {result.passages?.length > 0 && (
+        <>
+          <p className="passages-heading">
+            Relevant Passages from DB
+          </p>
+          {result.passages.map((p, i) => (
+            <div key={i} style={{ marginBottom: "0.75rem" }}>
+              <blockquote>{p.text}</blockquote>
+              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.25rem", paddingLeft: "0.5rem", fontFamily: "var(--font-mono)" }}>
+                chunk {p.chunk_index + 1} of {p.total_chunks}
+              </p>
+            </div>
+          ))}
+        </>
       )}
     </div>
   );
