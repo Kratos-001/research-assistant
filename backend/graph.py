@@ -43,6 +43,7 @@ def build_graph():
             "retrieval": "retrieval",
             "factcheck": "factcheck",
             "analysis": "analysis",
+            "clarification": END,
         },
     )
 

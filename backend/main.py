@@ -1,9 +1,12 @@
 import io
+import json
 import PyPDF2
 from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Union
 import uvicorn
 
 from tools.metadata_store import init_db, list_documents, get_metadata, delete_metadata, get_paper_metadata
@@ -98,25 +101,48 @@ async def upload(file: UploadFile = File(...)):
     }
 
 
-# ── Analyze endpoint — runs agent pipeline using already-processed collection
+# ── Analyze endpoint — runs agent pipeline across one or more collections ─────
+
+class AnalyzeRequest(BaseModel):
+    collection_names: Union[list, str]   # list of collection names or "all"
+    file_names: Union[list, str]         # parallel list of file names or "all"
+    query: str
+    skip_clarification: bool = False     # True when user explicitly chose "both papers"
+
 
 @app.post("/analyze")
-async def analyze(
-    collection_name: str = Form(...),
-    query: str = Form(...),
-    file_name: str = Form(...),
-):
-    """Runs the LangGraph pipeline. Expects collection_name from /upload."""
+async def analyze(req: AnalyzeRequest):
+    """Runs the LangGraph pipeline across one or more pre-uploaded documents."""
+
+    if req.collection_names == "all":
+        docs = list_documents()
+        if not docs:
+            raise HTTPException(status_code=400, detail="No documents uploaded yet.")
+        collection_names = [d["collection_name"] for d in docs]
+        file_names = [d["file_name"] for d in docs]
+    else:
+        collection_names = req.collection_names
+        file_names = req.file_names if isinstance(req.file_names, list) else []
+        if not collection_names:
+            raise HTTPException(status_code=400, detail="No papers selected.")
+
+    # Pad file_names if shorter
+    while len(file_names) < len(collection_names):
+        file_names.append("unknown")
 
     result = agent_graph.invoke(
         {
-            "user_query": query,
-            "document_text": "",          # not needed — agents read from ChromaDB/SQLite
-            "file_name": file_name,
-            "collection_name": collection_name,
+            "user_query": req.query,
+            "document_text": "",
+            "file_name": file_names[0],
+            "collection_name": collection_names[0],
+            "collection_names": collection_names,
+            "file_names": file_names,
             "guardrail_blocked": None,
             "route": None,
             "routing_reason": None,
+            "clarification_question": None,
+            "skip_clarification": req.skip_clarification,
             "retrieval_result": None,
             "factcheck_result": None,
             "analysis_result": None,
@@ -129,14 +155,28 @@ async def analyze(
         return {"error": result.get("error"), "route": None, "result": None}
 
     active_agent = result.get("route")
+
+    # Clarification requested — no agent ran
+    if active_agent == "clarification":
+        return {
+            "route": "clarification",
+            "routing_reason": result.get("routing_reason"),
+            "clarification_question": result.get("clarification_question"),
+            "result": None,
+            "collection_names": collection_names,
+            "file_names": file_names,
+            "error": None,
+        }
+
     agent_result = result.get(f"{active_agent}_result") if active_agent else None
 
     return {
         "route": active_agent,
         "routing_reason": result.get("routing_reason"),
+        "clarification_question": None,
         "result": agent_result,
-        "file_name": file_name,
-        "collection_name": collection_name,
+        "collection_names": collection_names,
+        "file_names": file_names,
         "error": result.get("error"),
     }
 

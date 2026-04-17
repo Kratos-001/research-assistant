@@ -36,6 +36,8 @@ const AGENTS = [
 function getAgentStatus(agentKey, activeAgent, status) {
   if (status === "idle") return "idle";
   if (status === "routing" || status === "uploading") return "routing";
+  // clarification — no specialist agent was selected, all stay idle
+  if (activeAgent === "clarification") return "idle";
   if (status === "running" || status === "done" || status === "error") {
     if (agentKey === activeAgent) {
       return status === "running" ? "active" : "done";
@@ -47,6 +49,7 @@ function getAgentStatus(agentKey, activeAgent, status) {
 
 export default function AgentPipeline({ status, activeAgent, routingReason }) {
   const isOrchestrating = ["uploading", "routing"].includes(status);
+  const isClarifying = status === "done" && activeAgent === "clarification";
   const isActive = status !== "idle";
 
   return (
@@ -63,7 +66,12 @@ export default function AgentPipeline({ status, activeAgent, routingReason }) {
         </div>
         <span className="orchestrator-label">Orchestrator</span>
         {isOrchestrating && <div className="orchestrator-spinner" />}
-        {status === "done" && (
+        {isClarifying && (
+          <span style={{ marginLeft: "auto", fontSize: "0.68rem", color: "var(--accent, #6ee7b7)", fontFamily: "var(--font-mono)" }}>
+            asking…
+          </span>
+        )}
+        {status === "done" && !isClarifying && (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--green)" strokeWidth="2" style={{ marginLeft: "auto" }}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>

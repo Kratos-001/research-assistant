@@ -117,6 +117,24 @@ def get_metadata(collection_name: str) -> dict | None:
     return record
 
 
+def get_paper_metadata_batch(collection_names: list) -> list[dict]:
+    """Fetch full records for a list of collection names in one query."""
+    if not collection_names:
+        return []
+    placeholders = ",".join("?" * len(collection_names))
+    with _conn() as con:
+        rows = con.execute(
+            f"SELECT * FROM documents WHERE collection_name IN ({placeholders})",
+            collection_names,
+        ).fetchall()
+    result = []
+    for r in rows:
+        record = dict(r)
+        record["paper_metadata"] = json.loads(record.get("paper_metadata") or "{}")
+        result.append(record)
+    return result
+
+
 def list_documents() -> list[dict]:
     """Return all document records, newest first."""
     with _conn() as con:

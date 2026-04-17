@@ -1,3 +1,49 @@
+// ── Clarification prompt — orchestrator asks which paper ──────────────────────
+function ClarificationResult({ clarification, onClarifyPaper, onClarifyBoth }) {
+  const { question, papers } = clarification;
+  return (
+    <div className="result-section">
+      <div className="result-agent-label">
+        <span className="result-agent-dot" style={{ background: "var(--accent, #6ee7b7)" }} />
+        Orchestrator — needs clarification
+      </div>
+
+      <p style={{ margin: "0.75rem 0 1rem", lineHeight: 1.6, color: "var(--text-primary, #e2e8f0)" }}>
+        {question}
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+        {papers.map((p) => (
+          <button
+            key={p.id}
+            className="followup-btn"
+            style={{ textAlign: "left", justifyContent: "flex-start" }}
+            onClick={() => onClarifyPaper(p.id)}
+          >
+            {p.fileName}
+          </button>
+        ))}
+
+        {papers.length > 1 && (
+          <button
+            className="followup-btn"
+            style={{
+              textAlign: "left",
+              justifyContent: "flex-start",
+              borderColor: "var(--accent, #6ee7b7)",
+              color: "var(--accent, #6ee7b7)",
+            }}
+            onClick={onClarifyBoth}
+          >
+            Both papers — show answers side by side
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Retrieval result ───────────────────────────────────────────────────────────
 function RetrievalResult({ result }) {
   return (
     <div className="result-section">
@@ -6,8 +52,8 @@ function RetrievalResult({ result }) {
         Retrieval Agent — fetched from database
       </div>
 
-      {/* Metadata query — show direct answer from SQLite */}
-      {result.answer_source === "metadata" && (
+      {/* Single-paper metadata answer */}
+      {result.answer_source === "metadata" && !result.per_paper_answers && (
         <>
           {result.answer ? (
             <p className="answer-text" style={{ margin: "0.75rem 0" }}>{result.answer}</p>
@@ -17,6 +63,43 @@ function RetrievalResult({ result }) {
             </div>
           )}
         </>
+      )}
+
+      {/* Multi-paper metadata — per-paper labeled answers */}
+      {result.answer_source === "metadata" && result.per_paper_answers && (
+        <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {result.per_paper_answers.map((p, i) => (
+            <div
+              key={i}
+              style={{
+                background: "var(--surface-2, rgba(255,255,255,0.04))",
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                padding: "0.75rem 1rem",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "0.72rem",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--accent, #6ee7b7)",
+                  marginBottom: "0.4rem",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {p.paper_title || p.file_name}
+              </p>
+              {p.answer ? (
+                <p className="answer-text" style={{ margin: 0 }}>{p.answer}</p>
+              ) : (
+                <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: 0 }}>
+                  Metadata not available for this paper.
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Content query — show relevant passages from ChromaDB */}
@@ -37,7 +120,7 @@ function RetrievalResult({ result }) {
                 <div key={i} style={{ marginBottom: "0.75rem" }}>
                   <blockquote>{p.text}</blockquote>
                   <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.25rem", paddingLeft: "0.5rem", fontFamily: "var(--font-mono)" }}>
-                    chunk {p.chunk_index + 1} of {p.total_chunks}
+                    {p.source_file && <span>{p.source_file} · </span>}chunk {p.chunk_index + 1} of {p.total_chunks}
                   </p>
                 </div>
               ))}
@@ -99,6 +182,12 @@ function AnalysisResult({ result, onFollowup }) {
       </div>
 
       <div className="doc-type-badge">{result.document_type}</div>
+
+      {result.papers_analyzed?.length > 1 && (
+        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.4rem 0 0.75rem", fontFamily: "var(--font-mono)" }}>
+          Analyzing: {result.papers_analyzed.join(" · ")}
+        </p>
+      )}
 
       <div className="summary-block">
         <h2>Summary</h2>
@@ -180,7 +269,7 @@ function AnalysisResult({ result, onFollowup }) {
   );
 }
 
-export default function ResultPanel({ status, activeAgent, result, error, onFollowup }) {
+export default function ResultPanel({ status, activeAgent, result, error, clarification, onFollowup, onClarifyPaper, onClarifyBoth }) {
   if (error) {
     return (
       <div className="result-panel">
@@ -220,14 +309,29 @@ export default function ResultPanel({ status, activeAgent, result, error, onFoll
     );
   }
 
-  if (status === "done" && result) {
-    return (
-      <div className="result-panel">
-        {activeAgent === "retrieval" && <RetrievalResult result={result} />}
-        {activeAgent === "factcheck" && <FactCheckResult result={result} />}
-        {activeAgent === "analysis" && <AnalysisResult result={result} onFollowup={onFollowup} />}
-      </div>
-    );
+  if (status === "done") {
+    // Clarification — orchestrator needs the user to pick a paper
+    if (clarification) {
+      return (
+        <div className="result-panel">
+          <ClarificationResult
+            clarification={clarification}
+            onClarifyPaper={onClarifyPaper}
+            onClarifyBoth={onClarifyBoth}
+          />
+        </div>
+      );
+    }
+
+    if (result) {
+      return (
+        <div className="result-panel">
+          {activeAgent === "retrieval" && <RetrievalResult result={result} />}
+          {activeAgent === "factcheck" && <FactCheckResult result={result} />}
+          {activeAgent === "analysis" && <AnalysisResult result={result} onFollowup={onFollowup} />}
+        </div>
+      );
+    }
   }
 
   return null;

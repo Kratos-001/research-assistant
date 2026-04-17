@@ -167,17 +167,19 @@ def store_document(file_name: str, document_text: str) -> tuple[str, int]:
 
 # ── ChromaDB similarity search ─────────────────────────────────────────────
 
-def similarity_search(collection_name: str, query: str, top_k: int = 5) -> list[dict]:
+def similarity_search(collection_name: str, query: str, top_k: int = 5, max_distance: float = 0.75) -> list[dict]:
     """Cosine-similarity search against a stored ChromaDB collection.
 
     Returns a list of dicts with 'text' and 'metadata' keys, ranked by
     similarity (ChromaDB returns closest first when space=cosine).
+    Filters out results with distance greater than max_distance.
     """
     client = get_client()
     ef = get_embedding_fn()
 
     collection = client.get_collection(name=collection_name, embedding_function=ef)
-    n = min(top_k, collection.count())
+    # Fetch a larger candidate pool to ensure we have top_k AFTER distance filtering
+    n = min(top_k * 2, collection.count())
     if n == 0:
         return []
 
@@ -187,7 +189,33 @@ def similarity_search(collection_name: str, query: str, top_k: int = 5) -> list[
         include=["documents", "metadatas", "distances"],
     )
 
-    return [
-        {"text": doc, "metadata": meta}
-        for doc, meta in zip(results["documents"][0], results["metadatas"][0])
+    valid_results = [
+        {"text": doc, "metadata": meta, "distance": dist}
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        )
+        if dist <= max_distance
     ]
+    
+    return valid_results[:top_k]
+
+
+def reconstruct_text(collection_name: str, max_chars: int = 15000) -> str:
+    """Reconstruct document text from stored chunks, ordered by chunk_index."""
+    try:
+        client = get_client()
+        ef = get_embedding_fn()
+        collection = client.get_collection(name=collection_name, embedding_function=ef)
+        if collection.count() == 0:
+            return ""
+        result = collection.get(include=["documents", "metadatas"])
+        pairs = sorted(
+            zip(result["documents"], result["metadatas"]),
+            key=lambda x: x[1].get("chunk_index", 0),
+        )
+        full_text = " ".join(doc for doc, _ in pairs)
+        return full_text[:max_chars]
+    except Exception:
+        return ""

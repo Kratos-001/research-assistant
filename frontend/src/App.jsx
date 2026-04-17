@@ -6,130 +6,124 @@ import ResultPanel from "./components/ResultPanel";
 
 const API_URL = "http://localhost:8080";
 
-function PaperMetaCard({ meta, uploadStatus, uploadError }) {
-  if (uploadStatus === "uploading") {
-    return (
-      <div className="paper-meta-card" style={{ marginTop: "1rem" }}>
-        <p className="passages-heading" style={{ marginBottom: "0.5rem" }}>Processing paper…</p>
-        {[80, 60, 40].map((w, i) => (
-          <div key={i} className="skeleton" style={{ height: "14px", width: `${w}%`, marginBottom: "0.5rem" }} />
-        ))}
-      </div>
-    );
-  }
+// ── Paper selector — shown when 2+ papers are ready ─────────────────────────
+function PaperSelector({ papers, selectedIds, onToggle, onSelectAll }) {
+  const readyPapers = papers.filter((p) => p.uploadStatus === "ready");
+  if (readyPapers.length < 2) return null;
 
-  if (uploadStatus === "error") {
-    return (
-      <div className="warning-banner" style={{ marginTop: "1rem" }}>
-        ⚠ {uploadError || "Upload failed. Please try again."}
-      </div>
-    );
-  }
-
-  if (uploadStatus !== "ready" || !meta) return null;
+  const allSelected = selectedIds === "all";
 
   return (
-    <div className="paper-meta-card" style={{ marginTop: "1rem" }}>
-      <p className="passages-heading" style={{ marginBottom: "0.6rem" }}>Paper Metadata</p>
-      {meta.title && (
-        <div className="meta-row">
-          <span className="meta-label">Title</span>
-          <span className="meta-value">{meta.title}</span>
-        </div>
-      )}
-      {meta.authors?.length > 0 && (
-        <div className="meta-row">
-          <span className="meta-label">Authors</span>
-          <span className="meta-value">{meta.authors.join(", ")}</span>
-        </div>
-      )}
-      {meta.year && (
-        <div className="meta-row">
-          <span className="meta-label">Year</span>
-          <span className="meta-value">{meta.year}</span>
-        </div>
-      )}
-      {meta.journal && (
-        <div className="meta-row">
-          <span className="meta-label">Journal</span>
-          <span className="meta-value">{meta.journal}</span>
-        </div>
-      )}
-      {meta.doi && (
-        <div className="meta-row">
-          <span className="meta-label">DOI</span>
-          <span className="meta-value" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{meta.doi}</span>
-        </div>
-      )}
-      {meta.institution?.length > 0 && (
-        <div className="meta-row">
-          <span className="meta-label">Institution</span>
-          <span className="meta-value">{meta.institution.join(", ")}</span>
-        </div>
-      )}
-      {meta.keywords?.length > 0 && (
-        <div className="meta-row">
-          <span className="meta-label">Keywords</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.2rem" }}>
-            {meta.keywords.map((k, i) => (
-              <span key={i} className="file-type-badge">{k}</span>
-            ))}
-          </div>
-        </div>
-      )}
-      {meta.abstract && (
-        <div style={{ marginTop: "0.75rem" }}>
-          <span className="meta-label">Abstract</span>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.65, marginTop: "0.3rem" }}>
-            {meta.abstract}
-          </p>
-        </div>
-      )}
+    <div style={{ marginTop: "1rem" }}>
+      <p className="query-label" style={{ marginBottom: "0.4rem" }}>Select papers to query</p>
+      <div
+        style={{
+          background: "var(--surface-2, rgba(255,255,255,0.04))",
+          border: "1px solid var(--border)",
+          borderRadius: "8px",
+          overflow: "hidden",
+        }}
+      >
+        {/* All papers option */}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.5rem 0.75rem",
+            cursor: "pointer",
+            borderBottom: "1px solid var(--border)",
+            fontSize: "0.8rem",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onSelectAll()}
+            style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+          />
+          <span style={{ fontWeight: 500, color: "var(--text-primary, #e2e8f0)" }}>All papers</span>
+          <span style={{ marginLeft: "auto", color: "var(--text-muted)", fontSize: "0.72rem" }}>
+            {readyPapers.length} papers
+          </span>
+        </label>
+
+        {/* Individual papers */}
+        {readyPapers.map((paper) => {
+          const checked = allSelected || (Array.isArray(selectedIds) && selectedIds.includes(paper.id));
+          return (
+            <label
+              key={paper.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.45rem 0.75rem",
+                cursor: "pointer",
+                fontSize: "0.78rem",
+                color: "var(--text-secondary)",
+                borderBottom: "1px solid var(--border)",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(paper.id)}
+                style={{ accentColor: "var(--accent)", width: 14, height: 14 }}
+              />
+              <span
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={paper.fileName}
+              >
+                {paper.fileName}
+              </span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
+// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [file, setFile] = useState(null);
-  const [collectionName, setCollectionName] = useState(null);
-  const [paperMetadata, setPaperMetadata] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | ready | error
-  const [uploadError, setUploadError] = useState(null);
+  // Multi-paper state — each paper: { id, file, fileName, collectionName, uploadStatus, uploadError }
+  const [papers, setPapers] = useState([]);
+  // selectedIds: "all" or array of paper IDs
+  const [selectedIds, setSelectedIds] = useState("all");
 
+  // Analysis state
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | routing | running | done | error
+  const [status, setStatus] = useState("idle");
   const [activeAgent, setActiveAgent] = useState(null);
   const [routingReason, setRoutingReason] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  // Clarification state: null | { question, papers: [{id, fileName}] }
+  const [clarification, setClarification] = useState(null);
 
-  async function handleFileSelect(f) {
-    setFile(f);
-    // Reset analysis state when file changes
-    setResult(null);
-    setError(null);
-    setActiveAgent(null);
-    setRoutingReason(null);
-    setStatus("idle");
+  // ── Upload a new file ──────────────────────────────────────────────────────
+  async function handleFileAdd(file) {
+    const id = `${Date.now()}-${Math.random()}`;
+    const newPaper = {
+      id,
+      file,
+      fileName: file.name,
+      collectionName: null,
+      uploadStatus: "uploading",
+      uploadError: null,
+    };
 
-    if (!f) {
-      // File removed
-      setCollectionName(null);
-      setPaperMetadata(null);
-      setUploadStatus("idle");
-      setUploadError(null);
-      return;
-    }
-
-    // Immediately upload and process the file
-    setUploadStatus("uploading");
-    setUploadError(null);
-    setCollectionName(null);
-    setPaperMetadata(null);
+    setPapers((prev) => [...prev, newPaper]);
 
     try {
       const formData = new FormData();
-      formData.append("file", f);
+      formData.append("file", file);
 
       const response = await fetch(`${API_URL}/upload`, {
         method: "POST",
@@ -138,63 +132,125 @@ export default function App() {
 
       if (!response.ok) {
         let errMsg = `Upload failed: ${response.status}`;
-        try {
-          const errBody = await response.json();
-          errMsg = errBody.detail || errMsg;
-        } catch {}
+        try { const b = await response.json(); errMsg = b.detail || errMsg; } catch {}
         throw new Error(errMsg);
       }
 
       const data = await response.json();
-      setCollectionName(data.collection_name);
-      setPaperMetadata(data.paper_metadata || null);
-      setUploadStatus("ready");
+      setPapers((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, collectionName: data.collection_name, uploadStatus: "ready" }
+            : p
+        )
+      );
     } catch (err) {
-      setUploadStatus("error");
-      setUploadError(err.message || "Upload failed. Is the backend running?");
+      setPapers((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, uploadStatus: "error", uploadError: err.message } : p
+        )
+      );
     }
   }
 
-  async function handleSubmit() {
-    if (!collectionName || !query.trim() || uploadStatus !== "ready") return;
+  // ── Remove a paper ─────────────────────────────────────────────────────────
+  async function handleFileRemove(id) {
+    const paper = papers.find((p) => p.id === id);
+    if (paper?.collectionName) {
+      try {
+        await fetch(`${API_URL}/documents/${paper.collectionName}`, { method: "DELETE" });
+      } catch {}
+    }
+    setPapers((prev) => prev.filter((p) => p.id !== id));
+    setSelectedIds((prev) => {
+      if (prev === "all") return "all";
+      return prev.filter((sid) => sid !== id);
+    });
+    setResult(null);
+    setError(null);
+    setStatus("idle");
+  }
+
+  // ── Paper selection ────────────────────────────────────────────────────────
+  function handleSelectAll() {
+    setSelectedIds("all");
+  }
+
+  function handleToggle(id) {
+    setSelectedIds((prev) => {
+      const readyIds = papers.filter((p) => p.uploadStatus === "ready").map((p) => p.id);
+      const current = prev === "all" ? readyIds : [...prev];
+      if (current.includes(id)) {
+        const next = current.filter((sid) => sid !== id);
+        return next.length === 0 ? "all" : next;
+      } else {
+        return [...current, id];
+      }
+    });
+  }
+
+  // ── Submit query ───────────────────────────────────────────────────────────
+  async function handleSubmit({ skipClarification = false, overridePaperIds = null } = {}) {
+    const readyPapers = papers.filter((p) => p.uploadStatus === "ready");
+    if (!readyPapers.length || !query.trim()) return;
+
+    // Resolve selected papers — allow override from clarification buttons
+    let targetPapers;
+    const idsToUse = overridePaperIds ?? selectedIds;
+    if (idsToUse === "all") {
+      targetPapers = readyPapers;
+    } else {
+      targetPapers = readyPapers.filter((p) => idsToUse.includes(p.id));
+      if (!targetPapers.length) targetPapers = readyPapers;
+    }
+
+    const collectionNames = targetPapers.map((p) => p.collectionName);
+    const fileNames = targetPapers.map((p) => p.fileName);
 
     setStatus("routing");
     setResult(null);
     setError(null);
     setActiveAgent(null);
     setRoutingReason(null);
+    setClarification(null);
 
     try {
-      const formData = new FormData();
-      formData.append("collection_name", collectionName);
-      formData.append("query", query);
-      formData.append("file_name", file.name);
-
       const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collection_names: collectionNames,
+          file_names: fileNames,
+          query,
+          skip_clarification: skipClarification,
+        }),
       });
 
       if (!response.ok) {
         let errMsg = `Server error: ${response.status}`;
-        try {
-          const errBody = await response.json();
-          errMsg = errBody.detail || errMsg;
-        } catch {}
+        try { const b = await response.json(); errMsg = b.detail || errMsg; } catch {}
         throw new Error(errMsg);
       }
 
       const data = await response.json();
+      if (data.error) throw new Error(data.error);
 
-      if (data.error) {
-        throw new Error(data.error);
+      // Orchestrator asked for clarification — show paper-selection prompt
+      if (data.route === "clarification") {
+        setActiveAgent("clarification");
+        setRoutingReason(data.routing_reason);
+        setStatus("done");
+        setClarification({
+          question: data.clarification_question || "Which paper would you like to query?",
+          papers: targetPapers.map((p) => ({ id: p.id, fileName: p.fileName })),
+        });
+        return;
       }
 
       setActiveAgent(data.route);
       setRoutingReason(data.routing_reason);
       setStatus("running");
 
-      // Brief pause so the active-agent animation plays
       await new Promise((r) => setTimeout(r, 1200));
 
       setResult(data.result);
@@ -205,13 +261,30 @@ export default function App() {
     }
   }
 
+  // ── Clarification handlers ─────────────────────────────────────────────────
+  // User chose a single specific paper from the clarification prompt
+  function handleClarifyPaper(paperId) {
+    setClarification(null);
+    handleSubmit({ skipClarification: false, overridePaperIds: [paperId] });
+  }
+
+  // User chose to query all papers — skip future clarification
+  function handleClarifyBoth() {
+    setClarification(null);
+    const readyIds = papers.filter((p) => p.uploadStatus === "ready").map((p) => p.id);
+    handleSubmit({ skipClarification: true, overridePaperIds: readyIds });
+  }
+
   function handleFollowup(q) {
     setQuery(q);
   }
 
+  const readyPapers = papers.filter((p) => p.uploadStatus === "ready");
+  const hasReadyPapers = readyPapers.length > 0;
+  const isLoading = ["routing", "running"].includes(status);
+
   return (
     <div className="app">
-      {/* Header */}
       <header className="header">
         <div className="header-logo">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -224,25 +297,27 @@ export default function App() {
       </header>
 
       <main className="main-grid">
-        {/* Left panel */}
         <aside className="left-panel">
-          <FileUpload file={file} onFileChange={handleFileSelect} />
-          <PaperMetaCard
-            meta={paperMetadata}
-            uploadStatus={uploadStatus}
-            uploadError={uploadError}
+          <FileUpload
+            papers={papers}
+            onFileAdd={handleFileAdd}
+            onFileRemove={handleFileRemove}
+          />
+          <PaperSelector
+            papers={papers}
+            selectedIds={selectedIds}
+            onToggle={handleToggle}
+            onSelectAll={handleSelectAll}
           />
           <QueryInput
             query={query}
             onQueryChange={setQuery}
             onSubmit={handleSubmit}
             status={status}
-            file={file}
-            uploadReady={uploadStatus === "ready"}
+            uploadReady={hasReadyPapers}
           />
         </aside>
 
-        {/* Right panel */}
         <section className="right-panel">
           <AgentPipeline
             status={status}
@@ -254,7 +329,10 @@ export default function App() {
             activeAgent={activeAgent}
             result={result}
             error={error}
+            clarification={clarification}
             onFollowup={handleFollowup}
+            onClarifyPaper={handleClarifyPaper}
+            onClarifyBoth={handleClarifyBoth}
           />
         </section>
       </main>

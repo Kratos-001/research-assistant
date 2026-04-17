@@ -9,7 +9,7 @@ const PLACEHOLDERS = [
   "What are the main arguments made?",
 ];
 
-export default function QueryInput({ query, onQueryChange, onSubmit, status, file, uploadReady }) {
+export default function QueryInput({ query, onQueryChange, onSubmit, status, uploadReady }) {
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const textareaRef = useRef(null);
 
@@ -85,11 +85,8 @@ export default function QueryInput({ query, onQueryChange, onSubmit, status, fil
         )}
       </button>
 
-      {!file && (
+      {!uploadReady && !isLoading && (
         <p className="query-hint">Upload a research paper (PDF or TXT) to begin.</p>
-      )}
-      {file && !uploadReady && !isLoading && (
-        <p className="query-hint">Processing paper — please wait…</p>
       )}
       {uploadReady && !isLoading && (
         <p className="query-hint">
