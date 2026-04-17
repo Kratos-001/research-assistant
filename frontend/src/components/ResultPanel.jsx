@@ -70,26 +70,30 @@ function RetrievalResult({ result }) {
         </div>
       )}
 
-      {/* Relevant passages from ChromaDB */}
-      <p className="answer-text" style={{ margin: "1rem 0 0.5rem" }}>{result.message}</p>
-
-      {!result.found_in_doc && (
-        <div className="warning-banner">
-          ⚠ No relevant passages found in the paper for this query.
-        </div>
-      )}
-
-      {result.passages?.length > 0 && (
+      {/* Relevant passages — only shown for content queries */}
+      {result.answer_source === "content" && (
         <>
-          <p className="passages-heading" style={{ marginBottom: "0.5rem" }}>Relevant Passages</p>
-          {result.passages.map((p, i) => (
-            <div key={i} style={{ marginBottom: "0.75rem" }}>
-              <blockquote>{p.text}</blockquote>
-              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.25rem", paddingLeft: "0.5rem", fontFamily: "var(--font-mono)" }}>
-                chunk {p.chunk_index + 1} of {p.total_chunks}
-              </p>
+          <p className="answer-text" style={{ margin: "1rem 0 0.5rem" }}>{result.message}</p>
+
+          {!result.found_in_doc && (
+            <div className="warning-banner">
+              ⚠ No relevant passages found in the paper for this query.
             </div>
-          ))}
+          )}
+
+          {result.passages?.length > 0 && (
+            <>
+              <p className="passages-heading" style={{ marginBottom: "0.5rem" }}>Relevant Passages</p>
+              {result.passages.map((p, i) => (
+                <div key={i} style={{ marginBottom: "0.75rem" }}>
+                  <blockquote>{p.text}</blockquote>
+                  <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "0.25rem", paddingLeft: "0.5rem", fontFamily: "var(--font-mono)" }}>
+                    chunk {p.chunk_index + 1} of {p.total_chunks}
+                  </p>
+                </div>
+              ))}
+            </>
+          )}
         </>
       )}
     </div>
