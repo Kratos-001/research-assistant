@@ -3,7 +3,11 @@ import hashlib
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
-# Persistent ChromaDB client — data survives across server restarts
+import os
+
+# Persistent ChromaDB client and Embedding Model.
+# We initialize these lazily to avoid uvicorn startup delays, but we forcefully 
+# disable HF network calls to avoid the infamous httpx "closed client" thread crashes.
 _chroma_client = None
 _embedding_fn = None
 
@@ -18,9 +22,10 @@ def get_client() -> chromadb.PersistentClient:
 def get_embedding_fn() -> SentenceTransformerEmbeddingFunction:
     global _embedding_fn
     if _embedding_fn is None:
-        _embedding_fn = SentenceTransformerEmbeddingFunction(
-            model_name="all-MiniLM-L6-v2"
-        )
+        # Bypasses httpx network calls completely; only uses the local cache
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        _embedding_fn = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
     return _embedding_fn
 
 
