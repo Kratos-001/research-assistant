@@ -9,7 +9,7 @@ const PLACEHOLDERS = [
   "What are the main arguments made?",
 ];
 
-export default function QueryInput({ query, onQueryChange, onSubmit, status, file }) {
+export default function QueryInput({ query, onQueryChange, onSubmit, status, file, uploadReady }) {
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const textareaRef = useRef(null);
 
@@ -28,8 +28,8 @@ export default function QueryInput({ query, onQueryChange, onSubmit, status, fil
     el.style.height = `${el.scrollHeight}px`;
   }, [query]);
 
-  const isLoading = ["uploading", "routing", "running"].includes(status);
-  const canSubmit = file && query.trim() && !isLoading;
+  const isLoading = ["routing", "running"].includes(status);
+  const canSubmit = uploadReady && query.trim() && !isLoading;
 
   function handleKey(e) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canSubmit) {
@@ -73,7 +73,7 @@ export default function QueryInput({ query, onQueryChange, onSubmit, status, fil
         {isLoading ? (
           <>
             <div className="spinner" />
-            {status === "routing" ? "Routing..." : status === "running" ? "Analyzing..." : "Uploading..."}
+            {status === "routing" ? "Routing..." : "Analyzing..."}
           </>
         ) : (
           <>
@@ -86,12 +86,12 @@ export default function QueryInput({ query, onQueryChange, onSubmit, status, fil
       </button>
 
       {!file && (
-        <p className="query-hint">Upload a document first to enable analysis.</p>
-      )}
-      {!file && (
         <p className="query-hint">Upload a research paper (PDF or TXT) to begin.</p>
       )}
-      {file && !isLoading && (
+      {file && !uploadReady && !isLoading && (
+        <p className="query-hint">Processing paper — please wait…</p>
+      )}
+      {uploadReady && !isLoading && (
         <p className="query-hint">
           Tip: ask <strong>"Is it true that..."</strong> for fact-checking · <strong>"Find..."</strong> for retrieval · <strong>"Summarize..."</strong> for analysis
         </p>

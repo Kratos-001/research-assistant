@@ -6,30 +6,169 @@ import ResultPanel from "./components/ResultPanel";
 
 const API_URL = "http://localhost:8080";
 
+function PaperMetaCard({ meta, uploadStatus, uploadError }) {
+  if (uploadStatus === "uploading") {
+    return (
+      <div className="paper-meta-card" style={{ marginTop: "1rem" }}>
+        <p className="passages-heading" style={{ marginBottom: "0.5rem" }}>Processing paper…</p>
+        {[80, 60, 40].map((w, i) => (
+          <div key={i} className="skeleton" style={{ height: "14px", width: `${w}%`, marginBottom: "0.5rem" }} />
+        ))}
+      </div>
+    );
+  }
+
+  if (uploadStatus === "error") {
+    return (
+      <div className="warning-banner" style={{ marginTop: "1rem" }}>
+        ⚠ {uploadError || "Upload failed. Please try again."}
+      </div>
+    );
+  }
+
+  if (uploadStatus !== "ready" || !meta) return null;
+
+  return (
+    <div className="paper-meta-card" style={{ marginTop: "1rem" }}>
+      <p className="passages-heading" style={{ marginBottom: "0.6rem" }}>Paper Metadata</p>
+      {meta.title && (
+        <div className="meta-row">
+          <span className="meta-label">Title</span>
+          <span className="meta-value">{meta.title}</span>
+        </div>
+      )}
+      {meta.authors?.length > 0 && (
+        <div className="meta-row">
+          <span className="meta-label">Authors</span>
+          <span className="meta-value">{meta.authors.join(", ")}</span>
+        </div>
+      )}
+      {meta.year && (
+        <div className="meta-row">
+          <span className="meta-label">Year</span>
+          <span className="meta-value">{meta.year}</span>
+        </div>
+      )}
+      {meta.journal && (
+        <div className="meta-row">
+          <span className="meta-label">Journal</span>
+          <span className="meta-value">{meta.journal}</span>
+        </div>
+      )}
+      {meta.doi && (
+        <div className="meta-row">
+          <span className="meta-label">DOI</span>
+          <span className="meta-value" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{meta.doi}</span>
+        </div>
+      )}
+      {meta.institution?.length > 0 && (
+        <div className="meta-row">
+          <span className="meta-label">Institution</span>
+          <span className="meta-value">{meta.institution.join(", ")}</span>
+        </div>
+      )}
+      {meta.keywords?.length > 0 && (
+        <div className="meta-row">
+          <span className="meta-label">Keywords</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.2rem" }}>
+            {meta.keywords.map((k, i) => (
+              <span key={i} className="file-type-badge">{k}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {meta.abstract && (
+        <div style={{ marginTop: "0.75rem" }}>
+          <span className="meta-label">Abstract</span>
+          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.65, marginTop: "0.3rem" }}>
+            {meta.abstract}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
+  const [collectionName, setCollectionName] = useState(null);
+  const [paperMetadata, setPaperMetadata] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState("idle"); // idle | uploading | ready | error
+  const [uploadError, setUploadError] = useState(null);
+
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | uploading | routing | running | done | error
+  const [status, setStatus] = useState("idle"); // idle | routing | running | done | error
   const [activeAgent, setActiveAgent] = useState(null);
   const [routingReason, setRoutingReason] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  async function handleSubmit() {
-    if (!file || !query.trim()) return;
+  async function handleFileSelect(f) {
+    setFile(f);
+    // Reset analysis state when file changes
+    setResult(null);
+    setError(null);
+    setActiveAgent(null);
+    setRoutingReason(null);
+    setStatus("idle");
 
-    setStatus("uploading");
+    if (!f) {
+      // File removed
+      setCollectionName(null);
+      setPaperMetadata(null);
+      setUploadStatus("idle");
+      setUploadError(null);
+      return;
+    }
+
+    // Immediately upload and process the file
+    setUploadStatus("uploading");
+    setUploadError(null);
+    setCollectionName(null);
+    setPaperMetadata(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", f);
+
+      const response = await fetch(`${API_URL}/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errMsg = `Upload failed: ${response.status}`;
+        try {
+          const errBody = await response.json();
+          errMsg = errBody.detail || errMsg;
+        } catch {}
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      setCollectionName(data.collection_name);
+      setPaperMetadata(data.paper_metadata || null);
+      setUploadStatus("ready");
+    } catch (err) {
+      setUploadStatus("error");
+      setUploadError(err.message || "Upload failed. Is the backend running?");
+    }
+  }
+
+  async function handleSubmit() {
+    if (!collectionName || !query.trim() || uploadStatus !== "ready") return;
+
+    setStatus("routing");
     setResult(null);
     setError(null);
     setActiveAgent(null);
     setRoutingReason(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("query", query);
-
     try {
-      setStatus("routing");
+      const formData = new FormData();
+      formData.append("collection_name", collectionName);
+      formData.append("query", query);
+      formData.append("file_name", file.name);
 
       const response = await fetch(`${API_URL}/analyze`, {
         method: "POST",
@@ -81,19 +220,25 @@ export default function App() {
           </svg>
           <span className="header-title">Research Assistant</span>
         </div>
-        <span className="header-tagline">LangGraph · Multi-Agent · Claude</span>
+        <span className="header-tagline">LangGraph · Multi-Agent · OpenAI</span>
       </header>
 
       <main className="main-grid">
         {/* Left panel */}
         <aside className="left-panel">
-          <FileUpload file={file} onFileChange={setFile} />
+          <FileUpload file={file} onFileChange={handleFileSelect} />
+          <PaperMetaCard
+            meta={paperMetadata}
+            uploadStatus={uploadStatus}
+            uploadError={uploadError}
+          />
           <QueryInput
             query={query}
             onQueryChange={setQuery}
             onSubmit={handleSubmit}
             status={status}
             file={file}
+            uploadReady={uploadStatus === "ready"}
           />
         </aside>
 

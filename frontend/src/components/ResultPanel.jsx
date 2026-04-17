@@ -1,6 +1,4 @@
 function RetrievalResult({ result }) {
-  const meta = result.paper_metadata || {};
-
   return (
     <div className="result-section">
       <div className="result-agent-label">
@@ -8,78 +6,23 @@ function RetrievalResult({ result }) {
         Retrieval Agent — fetched from database
       </div>
 
-      {/* Paper metadata from SQLite — always show card for metadata queries */}
-      {result.answer_source === "metadata" && Object.keys(meta).length === 0 && (
-        <div className="warning-banner">
-          ⚠ Metadata not found. Please re-upload the paper so it can be re-processed.
-        </div>
+      {/* Metadata query — show direct answer from SQLite */}
+      {result.answer_source === "metadata" && (
+        <>
+          {result.answer ? (
+            <p className="answer-text" style={{ margin: "0.75rem 0" }}>{result.answer}</p>
+          ) : (
+            <div className="warning-banner">
+              ⚠ Metadata not found. Please re-upload the paper so it can be re-processed.
+            </div>
+          )}
+        </>
       )}
 
-      {(meta.title || meta.authors?.length > 0 || meta.year || meta.doi) && (
-        <div className="paper-meta-card">
-          <p className="passages-heading" style={{ marginBottom: "0.6rem" }}>Paper Metadata</p>
-
-          {meta.title && (
-            <div className="meta-row">
-              <span className="meta-label">Title</span>
-              <span className="meta-value">{meta.title}</span>
-            </div>
-          )}
-          {meta.authors?.length > 0 && (
-            <div className="meta-row">
-              <span className="meta-label">Authors</span>
-              <span className="meta-value">{meta.authors.join(", ")}</span>
-            </div>
-          )}
-          {meta.year && (
-            <div className="meta-row">
-              <span className="meta-label">Year</span>
-              <span className="meta-value">{meta.year}</span>
-            </div>
-          )}
-          {meta.journal && (
-            <div className="meta-row">
-              <span className="meta-label">Journal</span>
-              <span className="meta-value">{meta.journal}</span>
-            </div>
-          )}
-          {meta.doi && (
-            <div className="meta-row">
-              <span className="meta-label">DOI</span>
-              <span className="meta-value" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{meta.doi}</span>
-            </div>
-          )}
-          {meta.institution?.length > 0 && (
-            <div className="meta-row">
-              <span className="meta-label">Institution</span>
-              <span className="meta-value">{meta.institution.join(", ")}</span>
-            </div>
-          )}
-          {meta.keywords?.length > 0 && (
-            <div className="meta-row">
-              <span className="meta-label">Keywords</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.2rem" }}>
-                {meta.keywords.map((k, i) => (
-                  <span key={i} className="file-type-badge">{k}</span>
-                ))}
-              </div>
-            </div>
-          )}
-          {meta.abstract && (
-            <div style={{ marginTop: "0.75rem" }}>
-              <span className="meta-label">Abstract</span>
-              <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.65, marginTop: "0.3rem" }}>
-                {meta.abstract}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Relevant passages — only shown for content queries */}
+      {/* Content query — show relevant passages from ChromaDB */}
       {result.answer_source === "content" && (
         <>
-          <p className="answer-text" style={{ margin: "1rem 0 0.5rem" }}>{result.message}</p>
+          <p className="answer-text" style={{ margin: "0.75rem 0 0.5rem" }}>{result.message}</p>
 
           {!result.found_in_doc && (
             <div className="warning-banner">
@@ -261,7 +204,7 @@ export default function ResultPanel({ status, activeAgent, result, error, onFoll
     );
   }
 
-  if (["uploading", "routing", "running"].includes(status)) {
+  if (["routing", "running"].includes(status)) {
     return (
       <div className="result-panel">
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

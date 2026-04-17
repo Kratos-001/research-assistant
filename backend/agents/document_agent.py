@@ -61,11 +61,12 @@ def _extract_paper_metadata(text: str) -> dict:
                 {"role": "system", "content": EXTRACTION_PROMPT},
                 {"role": "user", "content": f"Paper text:\n{preview}"},
             ],
-            max_tokens=512,
+            max_tokens=1500,
             response_format={"type": "json_object"},
         )
         return json.loads(response.choices[0].message.content)
-    except Exception:
+    except Exception as e:
+        print(f"[metadata extraction error] {e}")
         return {}
 
 
