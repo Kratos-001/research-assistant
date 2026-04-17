@@ -8,8 +8,14 @@ function RetrievalResult({ result }) {
         Retrieval Agent — fetched from database
       </div>
 
-      {/* Paper metadata from SQLite */}
-      {(meta.title || meta.authors?.length > 0) && (
+      {/* Paper metadata from SQLite — always show card for metadata queries */}
+      {result.answer_source === "metadata" && Object.keys(meta).length === 0 && (
+        <div className="warning-banner">
+          ⚠ Metadata not found. Please re-upload the paper so it can be re-processed.
+        </div>
+      )}
+
+      {(meta.title || meta.authors?.length > 0 || meta.year || meta.doi) && (
         <div className="paper-meta-card">
           <p className="passages-heading" style={{ marginBottom: "0.6rem" }}>Paper Metadata</p>
 
