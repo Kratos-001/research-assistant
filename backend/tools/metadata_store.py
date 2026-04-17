@@ -1,20 +1,26 @@
 """SQLite-backed document metadata registry.
 
-Stores document-level metadata separately from ChromaDB so it can be
-queried without touching the vector store. ChromaDB owns the chunks +
-embeddings; this module owns the document registry.
+Two responsibilities:
+1. Document registry — one row per uploaded paper (file_name, chunks, upload time)
+2. Paper metadata — structured JSON extracted from the paper (title, authors,
+   abstract, year, journal, DOI, keywords) stored in the `paper_metadata` column
+
+The retrieval agent reads from here when the user asks about paper metadata
+(authors, title, year, etc.) instead of doing a vector search.
 
 Schema
 ------
 documents
-  id             INTEGER  PK autoincrement
-  file_name      TEXT     original upload filename
-  collection_name TEXT    ChromaDB collection name for this document
-  total_chunks   INTEGER  number of chunks stored in ChromaDB
-  char_count     INTEGER  total characters in the extracted text
-  uploaded_at    TEXT     ISO-8601 UTC timestamp
+  id              INTEGER  PK autoincrement
+  file_name       TEXT     original upload filename
+  collection_name TEXT     ChromaDB collection name (UNIQUE)
+  total_chunks    INTEGER  number of chunks in ChromaDB
+  char_count      INTEGER  total characters in extracted text
+  uploaded_at     TEXT     ISO-8601 UTC timestamp
+  paper_metadata  TEXT     JSON — extracted paper info (title, authors, etc.)
 """
 
+import json
 import sqlite3
 import os
 from datetime import datetime, timezone
@@ -30,7 +36,7 @@ def _db_path() -> str:
 @contextmanager
 def _conn():
     con = sqlite3.connect(_db_path())
-    con.row_factory = sqlite3.Row  # rows behave like dicts
+    con.row_factory = sqlite3.Row
     try:
         yield con
         con.commit()
@@ -48,9 +54,15 @@ def init_db() -> None:
                 collection_name TEXT    NOT NULL UNIQUE,
                 total_chunks    INTEGER NOT NULL,
                 char_count      INTEGER NOT NULL,
-                uploaded_at     TEXT    NOT NULL
+                uploaded_at     TEXT    NOT NULL,
+                paper_metadata  TEXT    DEFAULT '{}'
             )
         """)
+        # Add paper_metadata column if upgrading from old schema
+        try:
+            con.execute("ALTER TABLE documents ADD COLUMN paper_metadata TEXT DEFAULT '{}'")
+        except Exception:
+            pass  # column already exists
 
 
 def save_metadata(
@@ -58,47 +70,69 @@ def save_metadata(
     collection_name: str,
     total_chunks: int,
     char_count: int,
+    paper_metadata: dict | None = None,
 ) -> dict:
-    """Insert or replace a document metadata record.
-
-    Uses INSERT OR REPLACE so re-uploading the same file updates the row
-    (collection_name has a UNIQUE constraint).
-    """
+    """Insert or replace a document record including extracted paper metadata JSON."""
     uploaded_at = datetime.now(timezone.utc).isoformat()
+    meta_json = json.dumps(paper_metadata or {})
+
     with _conn() as con:
         con.execute("""
-            INSERT INTO documents (file_name, collection_name, total_chunks, char_count, uploaded_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO documents
+                (file_name, collection_name, total_chunks, char_count, uploaded_at, paper_metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(collection_name) DO UPDATE SET
-                file_name    = excluded.file_name,
-                total_chunks = excluded.total_chunks,
-                char_count   = excluded.char_count,
-                uploaded_at  = excluded.uploaded_at
-        """, (file_name, collection_name, total_chunks, char_count, uploaded_at))
+                file_name      = excluded.file_name,
+                total_chunks   = excluded.total_chunks,
+                char_count     = excluded.char_count,
+                uploaded_at    = excluded.uploaded_at,
+                paper_metadata = excluded.paper_metadata
+        """, (file_name, collection_name, total_chunks, char_count, uploaded_at, meta_json))
 
     return get_metadata(collection_name)
 
 
+def get_paper_metadata(collection_name: str) -> dict | None:
+    """Fetch only the extracted paper metadata JSON for a document."""
+    with _conn() as con:
+        row = con.execute(
+            "SELECT paper_metadata FROM documents WHERE collection_name = ?",
+            (collection_name,)
+        ).fetchone()
+    if not row:
+        return None
+    return json.loads(row["paper_metadata"] or "{}")
+
+
 def get_metadata(collection_name: str) -> dict | None:
-    """Fetch metadata for a single document by collection name."""
+    """Fetch the full registry record for a document."""
     with _conn() as con:
         row = con.execute(
             "SELECT * FROM documents WHERE collection_name = ?", (collection_name,)
         ).fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    record = dict(row)
+    record["paper_metadata"] = json.loads(record.get("paper_metadata") or "{}")
+    return record
 
 
 def list_documents() -> list[dict]:
-    """Return all document metadata records, newest first."""
+    """Return all document records, newest first."""
     with _conn() as con:
         rows = con.execute(
             "SELECT * FROM documents ORDER BY uploaded_at DESC"
         ).fetchall()
-    return [dict(r) for r in rows]
+    result = []
+    for r in rows:
+        record = dict(r)
+        record["paper_metadata"] = json.loads(record.get("paper_metadata") or "{}")
+        result.append(record)
+    return result
 
 
 def delete_metadata(collection_name: str) -> bool:
-    """Remove a document's metadata record. Returns True if a row was deleted."""
+    """Remove a document record. Returns True if a row was deleted."""
     with _conn() as con:
         cursor = con.execute(
             "DELETE FROM documents WHERE collection_name = ?", (collection_name,)

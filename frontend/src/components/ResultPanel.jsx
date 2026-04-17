@@ -1,4 +1,6 @@
 function RetrievalResult({ result }) {
+  const meta = result.paper_metadata || {};
+
   return (
     <div className="result-section">
       <div className="result-agent-label">
@@ -6,9 +8,70 @@ function RetrievalResult({ result }) {
         Retrieval Agent — fetched from database
       </div>
 
-      <p className="answer-text" style={{ marginBottom: "1rem" }}>
-        {result.message}
-      </p>
+      {/* Paper metadata from SQLite */}
+      {(meta.title || meta.authors?.length > 0) && (
+        <div className="paper-meta-card">
+          <p className="passages-heading" style={{ marginBottom: "0.6rem" }}>Paper Metadata</p>
+
+          {meta.title && (
+            <div className="meta-row">
+              <span className="meta-label">Title</span>
+              <span className="meta-value">{meta.title}</span>
+            </div>
+          )}
+          {meta.authors?.length > 0 && (
+            <div className="meta-row">
+              <span className="meta-label">Authors</span>
+              <span className="meta-value">{meta.authors.join(", ")}</span>
+            </div>
+          )}
+          {meta.year && (
+            <div className="meta-row">
+              <span className="meta-label">Year</span>
+              <span className="meta-value">{meta.year}</span>
+            </div>
+          )}
+          {meta.journal && (
+            <div className="meta-row">
+              <span className="meta-label">Journal</span>
+              <span className="meta-value">{meta.journal}</span>
+            </div>
+          )}
+          {meta.doi && (
+            <div className="meta-row">
+              <span className="meta-label">DOI</span>
+              <span className="meta-value" style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem" }}>{meta.doi}</span>
+            </div>
+          )}
+          {meta.institution?.length > 0 && (
+            <div className="meta-row">
+              <span className="meta-label">Institution</span>
+              <span className="meta-value">{meta.institution.join(", ")}</span>
+            </div>
+          )}
+          {meta.keywords?.length > 0 && (
+            <div className="meta-row">
+              <span className="meta-label">Keywords</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.2rem" }}>
+                {meta.keywords.map((k, i) => (
+                  <span key={i} className="file-type-badge">{k}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {meta.abstract && (
+            <div style={{ marginTop: "0.75rem" }}>
+              <span className="meta-label">Abstract</span>
+              <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.65, marginTop: "0.3rem" }}>
+                {meta.abstract}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Relevant passages from ChromaDB */}
+      <p className="answer-text" style={{ margin: "1rem 0 0.5rem" }}>{result.message}</p>
 
       {!result.found_in_doc && (
         <div className="warning-banner">
@@ -18,9 +81,7 @@ function RetrievalResult({ result }) {
 
       {result.passages?.length > 0 && (
         <>
-          <p className="passages-heading">
-            Relevant Passages from DB
-          </p>
+          <p className="passages-heading" style={{ marginBottom: "0.5rem" }}>Relevant Passages</p>
           {result.passages.map((p, i) => (
             <div key={i} style={{ marginBottom: "0.75rem" }}>
               <blockquote>{p.text}</blockquote>
