@@ -135,7 +135,12 @@ export default function FileUpload({ papers, onFileAdd, onFileRemove }) {
             {paper.fileName}
           </span>
           {paper.uploadStatus === "error" && (
-            <span style={{ fontSize: "0.7rem", color: "var(--danger, #f87171)", flexShrink: 0 }}>failed</span>
+            <span
+              title={paper.uploadError || "Upload failed"}
+              style={{ fontSize: "0.7rem", color: "var(--danger, #f87171)", flexShrink: 0, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "help" }}
+            >
+              {paper.uploadError || "Upload failed"}
+            </span>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onFileRemove(paper.id); }}

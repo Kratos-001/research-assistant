@@ -8,11 +8,60 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Union
 import uvicorn
+from openai import OpenAI
 
 from tools.metadata_store import init_db, list_documents, get_metadata, delete_metadata, get_paper_metadata
 from tools.document_tools import get_client as get_chroma_client, store_document
 from agents.document_agent import _extract_paper_metadata
 from tools.metadata_store import save_metadata
+
+_openai = OpenAI()
+
+DOCUMENT_VALIDATION_PROMPT = """You are a strict content validator for a research paper analysis tool.
+This tool ONLY accepts academic research papers.
+
+Look at the document preview and decide: is this an academic research paper?
+
+ACCEPTED:
+- Peer-reviewed journal articles, preprints (arXiv, bioRxiv, SSRN etc.)
+- Clinical / medical / scientific studies
+- Conference papers (IEEE, ACM, NeurIPS, ICML, etc.)
+- Systematic reviews, meta-analyses, technical research reports
+- Key signals: abstract, introduction, methodology, results, discussion, conclusion, references, author affiliations, DOI, citations, statistical data
+
+REJECTED (everything else):
+- Legal documents, contracts, court filings
+- Books, textbooks, educational syllabi
+- News articles, blog posts, opinion pieces
+- Business reports, annual reports, invoices, presentations
+- Manuals, guides, Wikipedia pages, personal documents
+- Random text, code dumps, or unrelated files
+
+Respond ONLY with valid JSON:
+{
+  "document_ok": true | false,
+  "reason": "one sentence explaining your decision"
+}"""
+
+
+def _validate_is_research_paper(text: str) -> tuple[bool, str]:
+    """Returns (is_valid, reason). Raises nothing — caller handles errors."""
+    try:
+        preview = text[:4000]
+        response = _openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": DOCUMENT_VALIDATION_PROMPT},
+                {"role": "user", "content": f"Document preview:\n{preview}"},
+            ],
+            max_tokens=120,
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        return result.get("document_ok", True), result.get("reason", "")
+    except Exception:
+        # If the LLM check fails, allow the upload (fail open)
+        return True, ""
 
 app = FastAPI()
 app.add_middleware(
@@ -79,6 +128,14 @@ async def upload(file: UploadFile = File(...)):
 
     if len(text.strip()) < 200:
         raise HTTPException(status_code=422, detail="Document has too little extractable text.")
+
+    # ── Validate it's actually a research paper before storing anything ───────
+    is_paper, reason = _validate_is_research_paper(text)
+    if not is_paper:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Only academic research papers are accepted. {reason} Please upload a peer-reviewed paper, preprint, or scientific study.",
+        )
 
     # Chunk + embed → ChromaDB
     collection_name, total_chunks = store_document(file.filename, text)
