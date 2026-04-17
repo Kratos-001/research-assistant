@@ -88,6 +88,9 @@ export default function QueryInput({ query, onQueryChange, onSubmit, status, fil
       {!file && (
         <p className="query-hint">Upload a document first to enable analysis.</p>
       )}
+      {!file && (
+        <p className="query-hint">Upload a research paper (PDF or TXT) to begin.</p>
+      )}
       {file && !isLoading && (
         <p className="query-hint">
           Tip: ask <strong>"Is it true that..."</strong> for fact-checking · <strong>"Find..."</strong> for retrieval · <strong>"Summarize..."</strong> for analysis

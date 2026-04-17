@@ -98,8 +98,8 @@ export default function FileUpload({ file, onFileChange }) {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
               </svg>
             </div>
-            <p className="drop-label">Drop your document here or click to browse</p>
-            <p className="drop-hint">PDF &nbsp;·&nbsp; TXT</p>
+            <p className="drop-label">Drop your research paper here or click to browse</p>
+            <p className="drop-hint">Research papers only &nbsp;·&nbsp; PDF &nbsp;·&nbsp; TXT</p>
           </>
         )}
       </div>
