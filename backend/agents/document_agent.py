@@ -25,27 +25,36 @@ from tools.metadata_store import save_metadata
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 EXTRACTION_PROMPT = """You are a research paper metadata extractor.
-Extract the following fields from the paper text provided.
-If a field is not present, use null.
+Extract the following fields EXACTLY as they appear in the paper. Do NOT paraphrase, summarize, or rewrite any field.
+
+Rules:
+- title: copy the EXACT title word-for-word as it appears at the top of the paper. Do not rephrase.
+- authors: list ALL author names exactly as written (include all, not just the first few).
+- abstract: copy the full abstract text verbatim.
+- year: 4-digit publication year as a string, or null.
+- journal: exact journal or conference name as printed, or null.
+- doi: DOI string exactly as printed, or null.
+- keywords: extract from the keywords section if present, else infer up to 6 from the abstract.
+- institution: list ALL unique institutions/affiliations mentioned for ALL authors.
 
 Respond ONLY in JSON:
 {
-  "title": "full paper title",
+  "title": "exact title copied verbatim",
   "authors": ["Author One", "Author Two"],
-  "abstract": "full abstract text",
-  "year": "publication year as string or null",
-  "journal": "journal or conference name or null",
-  "doi": "DOI string or null",
+  "abstract": "full abstract text verbatim",
+  "year": "2021",
+  "journal": "exact journal name",
+  "doi": "10.xxxx/xxxxx",
   "keywords": ["keyword1", "keyword2"],
-  "institution": ["institution/affiliation 1", "institution/affiliation 2"]
+  "institution": ["institution 1", "institution 2"]
 }"""
 
 
 def _extract_paper_metadata(text: str) -> dict:
     """Use GPT-4o to extract structured metadata from the first part of the paper."""
     try:
-        # Title, authors, abstract are almost always in the first 3000 chars
-        preview = text[:3000]
+        # Use more chars — affiliations/institutions often appear after the abstract
+        preview = text[:6000]
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
